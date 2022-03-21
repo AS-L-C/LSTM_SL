@@ -1,471 +1,494 @@
-%% Figure 7
-
 clc
 close all
 clear all
 
-%% Initializations---------------------------------------------------------
-my_set_default(16,1,3)
-fsize.big     = 20;
-fsize.nor     = 18;
-fsize.small   = 16;
-fsize.lab     = 16;
-fsize.tickLAb = 14;
+%% Initialize figure-------------------------------------------------------
+figH = initFig([13.2, 22.50]); %It works!
+% figH = initFig([19.05, 22.50]); %It works!
+%% Create layout-----------------------------------------------------------
+% Set general layout
+pn = struct('r',7,'c',4,'rtop',4,'rbot',3);
+handles.main    = tiledlayout(figH, pn.r, 1, 'padding', 'normal','TileSpacing','none'); % Create a layout of 5 rows and 1 column
+handles.main.Units = 'centimeters';
+handles.main.OuterPosition = [.1 0 13.2 22.50*.9];
+% Create 'handles.top' sublayout
+handles.top     = tiledlayout(handles.main, pn.rtop, pn.c, 'padding', 'none','TileSpacing','none'); % Create a 4X3 sublayout 'handles.top'
+handles.top.Layout.Tile     = [1]; % Make 'handles.top' start from tile 1 of 'haldles.main'
+handles.top.Layout.TileSpan = [pn.rtop 1]; % Make 'handles.top' span 4 rows and 1 column
+% Create 'handles.bottom' sublayout
+handles.bottom  = tiledlayout(handles.main, pn.rbot, pn.c, 'padding', 'none','TileSpacing','none');  % 3X1
+% handles.bottom.Layout.Tile     = [pn.rtop*pn.c + 1];
+handles.bottom.Layout.Tile     = [pn.rtop + 1]; %Starts from 5th tile of handles.main
+handles.bottom.Layout.TileSpan = [pn.rbot 1];
+% nexttile(handles.bottom)
+% plot(rand(1,10))
 
-co.st  = [.4 .4 .4];
-co.ea  = [.2 .2 .2];
-co.end = [0 0 0];
-epCols = [co.st; co.ea; co.end; co.st; co.end; co.st; co.ea; co.end; co.st; co.end];
+%% Initialize model parameters
+% p = mfilename('fullpath'); %Full path of current file
+load('./Manuscript Figures/Data/Parameters/s82 learningTrace/allv.mat',...
+    'systpEst','estimPar','usts');
+indValStates = [1 2 5 6 9 10]; %Valid states
+sFuns        = struct('syspec',@syspec_ssim_v15,'ffun',@ffun_ssim_v15,'gfun',@gfun_ssim_v13);
 
-nrnc = [7,4];
-spInd = {1:4, 5:16, [21 25], [22 26], [23 24 27 28]};
-% Load InterferenceSavings data
-% load('..\..\Research_Pitt_AS\Data\IntereferenceData_Oct_29_2018\Preprocessed\IS\IndvSubjectsData_preprocessed_v3.mat')
-load('.\Manuscript Figures\Data\Experimental\IS Experiment\IS_preprocessed_v3.mat')
+% cols.default = get(groot,'defaultAxesColorOrder');
+n.states = length(indValStates);
 
-% Extract info
-p.i = summary.p{1}; %Interference pert
-p.s = summary.p{2}; %Savings pert
-p.tr.i = [150, 150+600, 1950,  2100, 2700];  %Transitions
-p.i(p.tr.i) = nan;
-p.s(p.tr.i) = nan;
+%% Load and simulate-------------------------------------------------------
+% Load data
+SData        = load('.\Manuscript Figures\Data\Experimental\IS Experiment\IS_preprocessed_v3.mat');
+data         = structfun(@(x) x([2 1]),  SData.summary, 'UniformOutput', false);
+clear Sdata;
+n.totStrides = length(data.m{1,1});  % Same as parad{1,1}.n.ttot;
 
-% Initialize plot params
-n.strTot = 2850;
-del = .035;
-faceAlphaCon = .2;
-sa.SV=.02; sa.SH=0.001; sa.MR=.005; sa.ML=.05; sa.MT=.045; sa.MB=.075;
+names.groups = {'SAV','INT'};
+n.groups     = length(names.groups);
 
-allc = get(groot,'defaultAxesColorOrder');
-
-% Groups
-gr.names = {'Interference', 'Savings'};
-gr.cols = {allc(2,:), allc(1,:)};
-
-% Conditions
-con.def = {[1 150], [151 750], [751,750+1200], [1951,2100], [2101,2700], [2701,2850]};
-con.col = {[1 1 1], allc(5,:) + [0 .2 0], allc(2,:),        [1 1 1],    allc(5,:) + [0 .2 0],  [1 1 1]};
-con.names = {'N', 'A_1', 'B', 'N_S', 'A_2', 'WO'};
-
-% Epochs
-ep.def = {[151, 155], [201, 230], [721,750], [1951, 1955], [2071, 2100], [2101 2105], [2151 2180], [2671 2700], [2701 2705], [2821, 2850]};
-% ep.names = {'A1_{START}', 'A1_{EARLY}' , 'A1_{END}', 'NS_{START}', 'NS_{END}', 'A2_{START}', 'A2_{EARLY}' , 'A2_{END}', 'WO_{START}', 'WO_{END}'};
-% ep.names = {'A1-Start', 'A1-Early' , 'A1-End', 'NS-Start', 'NS-End', 'A2-Start', 'A2-Early' , 'A2-End', 'WO-Start', 'WO-End'};
-ep.names = {'Start', 'Early' , 'End', 'Start', 'End', 'Start', 'Early' , 'End', 'Start', 'End'};
-
-% fh=figure('Color', 'w', 'units','normalized','outerposition',[0 0 1 1]);
-fh=figure('Color', 'w');
-
-%% 1st row: Plot of experimental paradigm----------------------------------
-h = subaxis(nrnc(1), nrnc(2), spInd{1}, 'SV', sa.SV, 'MR', sa.MR, 'ML', sa.ML, 'SH', sa.SH, 'MT', sa.MT, 'MB', sa.MB);
-
-%Patches
-x = nan(1,4); y=x;
-for c = 1:6
-    addPatches(c, con, del, faceAlphaCon)
+% Load and simulate SAV and INT paradigms----------------------------------
+d              = abs(usts.extra.dest.IS);
+c2 = cell(1,n.groups); parad = c2; epNames = c2; simp = c2; cout = c2;
+for gr = 1:n.groups
+    [parad{gr}, epNames{gr}] = loadParadigm(names.groups{gr},d);
+    simp{gr} = struct('oneStep', false, 'nt', parad{gr}.n.ttot,'u', parad{gr}.u,...
+        't', parad{gr}.t,  'udt2', [], 'Ts', []);
     
-    % Insert condition names
-    if c~=3
-        text(mean(con.def{c}), .5, con.names{c}, 'FontSize', fsize.nor, 'HorizontalAlignment', 'center')
+    % Simulate system
+    cout{gr}      = mySystSim(sFuns, systpEst, simp{gr});
+    parad{gr}.y   = cout{gr}.y;
+    parad{gr}.z   = parad{gr}.u - parad{gr}.y;
+end
+
+
+%% Set other plotting parameters-------------------------------------------
+fs.m   = 18;
+fs.s   = 16;
+fs.xs  = 14;
+fs.xxs = 12;
+
+lw.mark  = 2;
+lw.lines = 3;
+my_set_default(fs.xxs,lw.lines,2);
+[cols.default, cols.cbr, cols.grays] = getColors();
+cols.groups = [cols.default.blue; cols.default.orange];
+% cols.conditions = [[1 1 1];cols.default.green + [0 .2 0];...
+%                    cols.default.orange; [1 1 1];...
+%                    cols.default.green + [0 .2 0];  [1 1 1]];
+cols.st     = [.4 .4 .4];
+cols.ea     = [.2 .2 .2];
+cols.end    = [0 0 0];
+cols.epochs = [cols.st; cols.ea; cols.end; cols.st; cols.end; ...
+    cols.st; cols.ea; cols.end; cols.st; cols.end];
+epochs.def = {[151, 155],   [201, 230],  [721,750],   [1951, 1955], ...
+    [2071, 2100], [2101 2105], [2151 2180], [2671 2700], ...
+    [2701 2705],  [2821, 2850]};
+epochs.names = {'Start', 'Early' , 'End', ...
+    'Start', 'End', ...
+    'Start', 'Early' , 'End', ...
+    'Start', 'End'};
+
+%% Plot--------------------------------------------------------------------
+%% A: Plot paradigms ------------------------------------------------------
+sp.A = nexttile(handles.top,1,[1 pn.c]);
+dels = [.035 -.035];
+
+for gr=1:n.groups
+    hold on
+    prh(gr) = plot(nanTrans(parad{gr}.u + dels(gr),parad{gr}.transitions),'color', cols.groups(gr,:));
+end
+% Add patches
+%Savings
+cols.greenPatch = cols.default.green + [0 .2 0];
+patchParams.sav = struct('ylims', [-d d], 'colors', repmat(cols.greenPatch, 2, 1) ,...
+    'dx', 0,     'dy', .035 ,...
+    'alpha', .2, 'patchInd', [2 5],...
+    'patchPos', [0 0]);
+addParadPatches(sp.A, parad{1}, patchParams.sav);
+
+%Interference
+patchParams.int          = patchParams.sav;
+patchParams.int.colors   = cols.default.orange;
+patchParams.int.patchInd = 3;
+patchParams.int.patchPos = -1;
+addParadPatches(sp.A, parad{2}, patchParams.int);
+
+% Add labels
+addParadLabels(sp.A,  parad{1}, fs.xxs, [-d d], [ones(1,6)], [1:6]);
+addParadLabels(sp.A,  parad{2}, fs.xxs, [-d d],          -1, 3);
+
+% Change labels
+ylim([-d d])
+xticks(parad{1}.transitions);
+xticklabels('');
+ylab(1) = ylabel('Perturb. Magn.','FontSize', fs.xxs);
+yticks([-d 0 d])
+% yticklabels({'2:1', '1:1', '1:2'});
+yticklabels({'1', '0', '-1'});
+
+axis tight
+% legend(prh,'Savings','Interference', 'Location', 'southwest',...
+%            'NumColumns',1,'Orientation', 'vertical')
+% text(sp.A, 1, -d, {['\color[rgb]{' cols.default.blue '} Savings'],...
+%            ['\color[rgb]{' cols.default.blue '}Interference']},'FontSize', fs.xs)
+text(sp.A, 50, -d + .1 + .1 , 'Savings', 'Color', cols.default.blue, 'FontSize',   fs.xxs,'VerticalAlignment', 'bottom');
+text(sp.A, 50, -d - .1 + .05 , 'Interference', 'Color', cols.default.orange, 'FontSize', fs.xxs,'VerticalAlignment', 'bottom');
+% ca=gca;
+
+% exportgraphics(figH, 'outputTest1.pdf', 'ContentType', 'vector');
+
+%% B: time courses
+plPars = struct('type','data','cols',cols,'n',n,'ylimits',[-.85 .85],...
+    'patchParams',patchParams,'epochs',epochs,'d',d,'parad',{parad},...
+    'fs', fs, 'expandStart', true, 'expandStartMagn', 3,...
+    'addEpochLabels', true, 'rectangles', true,...
+    'dotSize', 30, 'rect', '');
+sp.B   = nexttile(handles.top,pn.c + 1,[2 pn.c]);
+out    = plotTimeCourse(data, plPars, sp.B);
+
+
+
+%% C: zoom in on relevant epochs
+zpars.zoomIns  = {151:250,2101:2200,1951:2100-3,2701:2850-3};
+zpars.zoomInsL = {'151','250';'2101','2200';'1951','2100';'2701','2850'};
+zpars.zoomep   = {'A_1', 'A_2', 'N_s', 'W_o'};
+zpars.legloc   = {'mr','mr','bm','mr'};
+sp.C           = nexttile(handles.top, pn.c*3 + 1,[1 1]);
+plPars.pn      = pn;
+plPars.rect    = out.rect;
+plPars.rect.fNormHeight = out.rect.normHeight;
+plPars.pn.prevRows= 3;
+plotZoomIN(data, plPars, zpars, handles.top)
+
+%% D: Model time courses
+plPars.type = 'model';
+plPars.addEpochLabels = false;
+sp.D        = nexttile(handles.bottom,1,[2 pn.c]);
+
+plPars.rect.fNormHeight = out.rect.normHeight*(sp.D.Position(4)/sp.B.Position(4));
+out                     = plotTimeCourse(data, plPars, sp.D);
+
+%% E:
+sp.E        = nexttile(handles.bottom, pn.c*2 + 1,[1 1]);
+plPars.pn.prevRows= 2;
+plPars.rectangles = false;
+% plPars.rect.fNormHeight = out.rect.normHeight*(sp.E.Position(4)/sp.B.Position(4));
+plotZoomIN(data, plPars, zpars, handles.bottom)
+sp.E.XLabel.String   = 'Strides';
+sp.E.XLabel.FontSize = fs.xxs';
+
+%% Add panel labels
+% Paradigm
+% cy = sum(handles.top.Position([2 4])); %.9350
+% cx = handles.top.Position(1) - .08;
+% h  = annotation('textarrow',[cx,cx],[cy,cy],'HeadStyle', 'none', 'LineStyle', 'none','String','Paradigm','FontSize',fs.xs,'TextRotation',90);
+% h  = annotation('textarrow',[cx,cx]-.01,[cy,cy]+.02,'HeadStyle', 'none', 'LineStyle', 'none','String','A','FontSize',fs.xs);
+% 
+% % Data
+% cy = cy -.325 + .2;
+% h  = annotation('textarrow',[cx,cx],[cy,cy],'HeadStyle', 'none', 'LineStyle', 'none','String','Data','FontSize',fs.xs,'TextRotation',90);
+% h  = annotation('textarrow',[cx,cx]-.01,[cy,cy],'HeadStyle', 'none', 'LineStyle', 'none','String','B','FontSize',fs.xs);
+% 
+% % LSTM-SL
+% cy = sum(handles.bottom.Position([2 4])) - .15;
+% h  = annotation('textarrow',[cx,cx],[cy,cy],'HeadStyle', 'none', 'LineStyle', 'none','String','LSTM-SL','FontSize',fs.xs,'TextRotation',90);
+% h  = annotation('textarrow',[cx,cx]-.01,[cy,cy]+.15,'HeadStyle', 'none', 'LineStyle', 'none','String','C','FontSize',fs.xs);
+addAnnotations(figH)
+function plotZoomIN(data, p, zpars, parentTile)
+cols   = p.cols;
+d      = p.d;
+n      = p.n;
+fs     = p.fs;
+epochs = p.epochs;
+pn     = p.pn;
+
+n.zis  = length(zpars.zoomIns);
+for zi = 1:n.zis
+    cHand(zi) = nexttile(parentTile, pn.c*pn.prevRows + zi,[1 1]);
+    hold on
+    cs = zpars.zoomIns{zi};
+    if zi==1
+        delGR  = [-2 2];
     else
-        text(mean(con.def{c}), -.5, con.names{c}, 'FontSize', fsize.nor, 'HorizontalAlignment', 'center')
-        text(mean(con.def{c}), .5, 'N_L', 'FontSize', fsize.nor, 'HorizontalAlignment', 'center')
+        delGR = [0 0];
     end
+
+    for ig = 1:n.groups
+        %             plot(cs,data.m{g}(cs));
+        if strcmp(p.type,'data')
+            hold on, [lh(ig), shadh(ig)] = boundedline(cs, data.m{ig}(cs), data.se{ig}(cs), ...
+                '-o', 'nan', 'gap');
+            shadh(ig).FaceColor    = cols.groups(ig,:);
+            shadh(ig).FaceAlpha = .5;
+        elseif strcmp(p.type,'model')
+            if zi==1 && ig==2
+                ls = '--';
+            else
+                ls = '-';
+            end
+            csla    = -p.parad{ig}.y(cs);
+            csla(1) = nan;
+            lh(ig)  = plot(cs, csla,'Color',...
+                cols.groups(ig,:),'LineStyle',ls);
+            scatter(cs(2) + delGR(ig),csla(2),p.dotSize,cols.groups(ig,:),'filled');
+            
+        end
+        lh(ig).LineWidth = 1;
+        lh(ig).Color           = cols.groups(ig,:);
+        lh(ig).MarkerFaceColor = cols.groups(ig,:);
+        axis tight
+        
+    end
+    xticks([cs(1) cs(end)])
+    xticklabels(zpars.zoomInsL(zi,:))
+    
+    if zi==3 && strcmp(p.type,'model')
+        cHand(zi).YAxis.Exponent = 0;
+        
+        %             xtickformat('%.0f')
+        cyl = cHand(zi).YLim;
+        cHand(zi).YLim       = [cyl(1) .001];
+        cHand(zi).YTick      = [-.003    0];
+        cHand(zi).YTickLabel = {'-.003' '0'};
+        %             cHand(zi).YTickLabel = ['3e-14'];
+        
+    end
+end
+% cHand(3).YTick = [.01 -.01];
+% cHand(2).YLim = cHand(1).YLim;
+linkaxes(cHand(1:2),'y');
+% Add patches
+% cHand(zi) = nexttile(handles.top, pn.c*3 + zi,[1 1]);
+
+
+for zi = 1:2
+    %         cHand(zi) = nexttile(handles.top, pn.c*3 + zi,[1 1]);
+    cx = cHand(zi).XLim;
+    cy = cHand(zi).YLim;
+    hold on,   cph = patch(cHand(zi),[cx fliplr(cx)],[cy(1)*[1 1] cy(2)*[1 1]],...
+        cols.greenPatch,'EdgeColor','none',...
+        'FaceAlpha', p.patchParams.sav.alpha);
+    uistack(cph,'bottom')
+    
     
 end
 
-% Add perturbation timecourses
-ll(1) = plot(p.s+del); hold on,
-ll(2) = plot(p.i-del);
-ll(1).LineWidth = 3; ll(2).LineWidth = 3;
-xticks([])
-ylab(1) = ylabel('Belt-Speed Ratio','FontSize', fsize.lab);
-yticks([-1 0 1])
-yticklabels({'2:1', '1:1', '1:2'});
-axis tight
-legend(ll,'Savings','Interference', 'Location', 'southwest', 'Orientation', 'horizontal')
-% ca=gca;
-h.FontSize   = fsize.nor;
-% title('Perturbation Protocol')
+% Add epoch names
+for zi=1:4
+    cx = cHand(zi).XLim;
+    cy = cHand(zi).YLim;
+    myAddText(cHand(zi),cx,cy,zpars.legloc{zi},zpars.zoomep{zi},fs.xxs)
+end
 
-%% 2nd row: Plot of adaptation timecourse----------------------------------
-h = subaxis(nrnc(1), nrnc(2), spInd{2}, 'SV', sa.SV, 'MR', sa.MR, 'ML', sa.ML, 'SH', sa.SH, 'MT', sa.MT, 'MB', 0);
+% Add rectangles
+if p.rectangles
+    rects  = {[1 2]; [1 2]; [1 3]; [1 3]};
+    epZoom = {{epochs.def{1}, epochs.def{2}}; {epochs.def{6}, epochs.def{7}};...
+        {epochs.def{4}, epochs.def{5}}; {epochs.def{9}, epochs.def{10}}};
+    for zi = 1:4
+        cx = cHand(zi).XLim;
+        cy = cHand(zi).YLim;        
+        %     rect.normHeight  = cax.Position(4)*rect.height/rect.range; %Height normalized with respect to figure
+        %     cheight = p.rect.normHeight*diff(cy)/cHand(zi).Position(4);
+        cheight = p.rect.fNormHeight*diff(cy)/cHand(zi).Position(4);
+        
+        ctypes = rects{zi};
+        ceps   = epZoom{zi};
+        for ir = 1:length(ctypes)
+            delx = diff(ceps{ir});
+            if p.expandStart && delx <=5
+                ceps{ir} = [ceps{ir}(1), ceps{ir}(1) + p.expandStartMagn*delx];
+            end
+            myRectangle(cHand(zi), ceps{ir},...
+                [cy(1), cy(1) + cheight], ctypes(ir), [0 0 0],[1 1 1], [.5 .5 .5])
+        end
+    end
+end
+end
 
+function out = plotTimeCourse(data, p, cax)
+cols = p.cols;
+d    = p.d;
+n    = p.n;
+fs   = p.fs;
 
-for ig = [2 1]
+%% B: plot IS data
+% Add plots
+% cla(sp.B);
+% sp.B.PositionConstraint = 'innerposition';
+% ylimits.fin  = [-.85 .85];
+delGR  = [-5 5];
+for ig = 1:n.groups % Plot in reverse order to overlap curves conveniently
     %     scatter(1:n.strTot, summary.m{ig}, 20,  gr.cols{ig}, 'filled');
-    hold on, [lh(ig), shadh(ig)] = boundedline(1:n.strTot, summary.m{ig}, summary.se{ig}, '-o', 'nan', 'gap');
+    hold on
+    if strcmp(p.type,'data')
+        [lh(ig), shadh(ig)] = boundedline(1:p.n.totStrides, data.m{ig}, data.se{ig}, ...
+            '-o', 'nan', 'gap');
+        shadh(ig).FaceColor    = cols.groups(ig,:);
+        shadh(ig).FaceAlpha = .5;
+    elseif strcmp(p.type,'model')
+        lh(ig) = plot(nanTrans(-p.parad{ig}.y,p.parad{ig}.transitions),'color',...
+            cols.groups(ig,:));
+        if ig==2 
+            indBS = 1:150;
+            plot(indBS, -p.parad{1}.y(indBS),'color',...
+            cols.groups(1,:),'LineStyle','--','LineWidth', 1);
+        
+            indA1 = 152:750;
+            plot(indA1, -p.parad{1}.y(indA1),'color',...
+            cols.groups(1,:),'LineStyle','--','LineWidth', 1);
+        end
+        indAfTransitions    = p.parad{ig}.transitions + 1;
+        iat    = indAfTransitions;
+        iat(1) = iat(1) + delGR(ig);
+        scatter(iat, -p.parad{ig}.y(indAfTransitions),p.dotSize,cols.groups(ig,:),'filled');
+    end
     lh(ig).LineWidth = 1;
-    lh(ig).Color  = gr.cols{ig};
-    lh(ig).MarkerFaceColor = gr.cols{ig};
-    shadh(ig).FaceColor = gr.cols{ig}; shadh(ig).FaceAlpha = .5;
+    lh(ig).Color           = cols.groups(ig,:);
+    lh(ig).MarkerFaceColor = cols.groups(ig,:);
     axis tight
 end
-YLdata = ylim();
-YLfin = YLdata + [-.2 0];
+% ylimits.init = ylim();
+ylim(p.ylimits);
 
 % Add patches
-dpatch = .05;
-for c = 1:6
-    addPatches(c, con, dpatch, faceAlphaCon, YLfin)
+p.patchParams.sav.ylims = p.ylimits;
+p.patchParams.int.ylims = p.ylimits;
+addParadPatches(cax, p.parad{1}, p.patchParams.sav);
+addParadPatches(cax, p.parad{1}, p.patchParams.int);
+
+% Add epoch names & rectangles
+pr   = struct('expandStart', p.expandStart, 'expandStartMagn', p.expandStartMagn, 'height', p.rect);
+rect = addEpochsNames(p.epochs, -d, p.ylimits, 10, cols.epochs, pr, p.addEpochLabels);
+% hiddenAx = myHiddenAxes(cax.Position, handles.top);
+
+if strcmp(p.type,'model')
+    ylab(2) = ylabel('Step Length Asymm.', 'FontSize', fs.xxs);
+    ylab(2).Position = ylab(2).Position + [0 -d*1.1 0] ;
 end
-
-ylim(YLfin)
-
-% Add epochs' names and horizonal lines
-for e = 1:10
-    addEpochs(e, ep, YLdata, fsize.small, epCols(e,:));
-end
-
-ylab(2) = ylabel('Step Length Asymmetry', 'FontSize', fsize.lab);
-xlabel('Strides','FontSize', fsize.lab)
-xticks(p.tr.i + 1);
-set(gca, 'TickLength',[0 0])
-
-% ca=gca;
-h.FontSize = fsize.nor;
-
-% ylim([-1.05 .77]);
-yticks([-.5 0 .5]);
-% yticklabels('FontSize', fsize.small)
-
-%% 3rd row (1/3): Plot of first 100 strides during A1 [A1(1-100)]----------
-dmr=0;
-dsh = .025;
-A1zoom = 151:250;
-hzoom(1) = subaxis(nrnc(1), nrnc(2), spInd{3}, 'SV', sa.SV, 'MR', sa.MR + dmr, 'ML', sa.ML, 'SH', sa.SH + dsh, 'MT', sa.MT, 'MB', sa.MB);
-for ig = [2 1]
-    %     scatter(1:n.strTot, summary.m{ig}, 20,  gr.cols{ig}, 'filled');
-    hold on, [lh(ig), shadh(ig)] = boundedline(A1zoom, summary.m{ig}(A1zoom),...
-             summary.se{ig}(A1zoom), '-o', 'nan', 'gap');
-    lh(ig).LineWidth = 1;
-    lh(ig).Color  = gr.cols{ig};
-    lh(ig).MarkerFaceColor = gr.cols{ig};
-    shadh(ig).FaceColor = gr.cols{ig}; shadh(ig).FaceAlpha = .5;
-end
-axis tight
-xticks(A1zoom([1, 50, end]))
-% set(gca, 'TickLength',[0 0])
-% hzoom(1).XAxis.Visible = 'off';
-ylab(3)=ylabel('Step Length Asymmetry', 'FontSize', fsize.lab);
-yticks([-.6, -.3 0])
-ytickformat('%.1f');
-xlabel('Strides');
-XL1 = xlim();
-text()
-
-%% 3rd row (2/3): Plot of first 100 strides during A2 [A2(1-100)]----------
-A2zoom = 2101:2200;
-hzoom(2) = subaxis(nrnc(1), nrnc(2), spInd{4}, 'SV', sa.SV, 'MR', sa.MR + dmr, 'ML', sa.ML, 'SH', sa.SH + dsh, 'MT', sa.MT, 'MB', sa.MB);
-for ig = [2 1]
-    %     scatter(1:n.strTot, summary.m{ig}, 20,  gr.cols{ig}, 'filled');
-    hold on, [lh(ig), shadh(ig)] = boundedline(A2zoom, summary.m{ig}(A2zoom),...
-             summary.se{ig}(A2zoom), '-o', 'nan', 'gap');
-    lh(ig).LineWidth = 1;
-    lh(ig).Color  = gr.cols{ig};
-    lh(ig).MarkerFaceColor = gr.cols{ig};
-    shadh(ig).FaceColor = gr.cols{ig}; shadh(ig).FaceAlpha = .5;
-end
-
-linkaxes(hzoom,'y')
-YL = ylim();
-ylim([YL(1), 0])
-% set(gca, 'TickLength',[0 0])
-yticks([-.6, -.3 0])
-yticklabels([]);
-xticks(A2zoom([1, 50, end]))
-
-hzoom(1).FontSize = fsize.nor;
-hzoom(2).FontSize = fsize.nor;
-xlabel('Strides');
-
-addPatch(XL1, YL, con.col{1,2}, faceAlphaCon, hzoom(1));
-addPatch(xlim(), YL ,con.col{1,2}, faceAlphaCon, hzoom(2));
-
-text(h)
-
-%% 3rd row (3/3): Plot barplots-----------------------------------------
-% load('C:\Users\Alessandro\Dropbox\Research_Pitt_AS\Data\IntereferenceData_Oct_29_2018\dataForBarPlots.mat')
-load('.\Manuscript Figures\Data\Experimental\IS Experiment\IS_barplotData.mat')
-
-% my_set_default(20,2,18);
-% plotBarplot(ts, n, Tadj)
-h = subaxis(nrnc(1), nrnc(2), spInd{end}, 'SV', sa.SV, 'MR', sa.MR + dmr, 'ML', sa.ML, 'SH', sa.SH + dsh, 'MT', sa.MT, 'MB', sa.MB);
-
-Ttemp = Tadj;
-Ttemp(11:13,:) = Tadj(14:16,:);
-Ttemp(14:16,:) = Tadj(11:13,:);
-Tadj = Ttemp;
-
-offs = .05;
-% function plotBarplot(ts, n, Tadj)
-Y = [ts.means.Sav ts.means.Int];
-gn = {'Sav','Int'};
-figure(1), hb = bar(Y);
-xc = hb(1).XData';
-X = [xc + hb(1).XOffset, xc + hb(2).XOffset];
-E = [ts.ses.Sav ts.ses.Int];
-Yp = Y>0; Yn = ~Yp;
-YE = Y;
-YE(Yp) = YE(Yp) + E(Yp);
-YE(Yn) = YE(Yn) - E(Yn);
-yh = max(YE(:)) + offs;
-% yl = min(YE(:)) - offs;
-yl = YE(6,2) - offs;
-yvl = yl - 6*offs;
-for g=1:n.gr
-    hold on, errorbar(X(:,g), Y(:,g), E(:,g),'k.', 'LineWidth', 2);
-end
-% legLoc = [0.68    0.25    0.3    0.06];
-% lh = legend({'Sav','Int'},'Orientation','horizontal','AutoUpdate','off','Position',legLoc, 'Units', 'normalized', 'Box', 'off');
-
-
-% Comparison between groups
-on = [1 1];
-xc = mean(X,2);
-for e=1:n.epochs
-    if Tadj.bonfSign(e)==1
-        ccol = [0 0 0];
-        cls = '-';
-    else
-        ccol = [0 0 0];
-        cls = ':';
-    end
-    
-    line(X(e,:), yh*on, 'Color',ccol, 'LineStyle', cls);
-    for ig=1:2
-        line(X(e,ig)*on, [yh yh-offs/2], 'Color',ccol, 'LineStyle', cls)
-    end
-    %     if Tadj.pvaladj(e)>0.05
-    %         str = 'n.s.'; fs = 18; delta = .025;
-    %     elseif Tadj.pvaladj(e)<0.01
-    %         str = '**'; fs = 30; delta = 0;
-    %     else
-    %         str = '*';  fs = 30; delta = 0;
-    %     end
-    [str, delta, fs]= getStr(Tadj.pvaladj(e),'up');
-    if ~isempty(str)
-        text(xc(e),yh+delta,str,'FontSize',fs,'HorizontalAlignment','center','VerticalAlignment','middle', 'Color', ccol);
-    end
-end
-
-% Comparison across time
-eComps = [1 6; 2 7; 3 8];
-grOld = [2 1];
-linIndComp = 1;
-for c = 1:3
-    for g=1:n.gr
-        indcomp = (Tadj.EpochA==eComps(c,1)) & (Tadj.EpochB==eComps(c,2)) & (Tadj.GroupA==grOld(g)) & (Tadj.GroupB==grOld(g));
-        
-        cx = [X(eComps(c,1),g) X(eComps(c,2),g)];
-        cy = (yvl+offs*(linIndComp));
-        
-        % Line Color
-        if Tadj.bonfSign(indcomp)==1
-            ccol = [0 0 0];
-            cls = '-';
-        else
-            ccol = [0 0 0];
-            cls = ':';
-        end
-        
-        % Horizontal lines
-        lh(1) = line(cx, on*cy, 'Color', ccol, 'LineStyle', cls);
-        
-        % Vertical lines
-        for i=1:2
-            %             line(cx(i)*on, [cy+offs/2 cy], 'Color', [0 0 0]);
-            lh(i+1) = line(cx(i)*on, [YE(eComps(c,i),g)- offs/2, cy], 'Color', ccol,  'LineStyle', cls);
-        end
-        
-        % Determine string
-        [str, delta, fs]= getStr(Tadj.pvaladj(indcomp),'down');
-        if ~isempty(str)
-            text(mean(cx),cy-delta,str,'FontSize',fs,'HorizontalAlignment','center','VerticalAlignment','middle', 'Color', ccol);
-        end
-        
-        linIndComp = linIndComp+1;
-    end
-end
-%%
-h.FontSize = fsize.nor;
-mStr = {'  *P<.05'
-        ' **P<.005'
-        '***P<.0005'} ;
-% axPos = get(gca,'position');
-% text(legLoc(1)+axPos(1), legLoc(2)-axPos(2)-.01, mStr,'Units', 'normalized', 'FontSize', 20, 'VerticalAlignment', 'middle')
-text(.85, .25, mStr,'Units', 'normalized', 'FontSize', fsize.small, 'VerticalAlignment', 'middle')
-
-ylim([-.8 .5]) ;
-yticks([-.5 0 .5]);
-% ylab(3) = ylabel('Step Length Asymmetry');
-set(gca,'XTickLabel',ep.names)
-h.XAxis.FontSize = fsize.small;
-xlabel('Epochs', 'FontSize' , fsize.nor);
-XL = xlim();
-YL = ylim();
-
-% Add Condition Name
-xloc = [mean(X(2,:)), mean([X(4,2), X(5,1)]), mean(X(7,:)), mean([X(9,2), X(10,1)]) ];
-ccomp = [2 4 5 6] ;
-for ic = 1:4
-    text(xloc(ic), YL(2), con.names{ccomp(ic)}, 'FontSize', fsize.small, ...
-        'HorizontalAlignment', 'center', 'VerticalAlignment', 'top' )
-end
-
-% Add patches
-
-epDef = [[XL(1) mean([X(3,2) X(4,1)])]; ...
-         [mean([X(5,2) X(6,1)]) mean([X(8,2) X(9,1)]) ]];
-epCol = [2 5];
-for iep=1:2
-    cep = epCol(iep);
-    addPatch(epDef(iep,:), YL, con.col{1,cep}, faceAlphaCon);
-end
-
-% Fix ylabel (alignment)
-% ylab(1).FontSize = fsize.big;
-% ylab(2).FontSize = fsize.big;
-% ylab(3).FontSize = fsize.big;
-% p1 = get(ylab(1), 'Pos');
-% p2 = get(ylab(2), 'Pos');
-% p3 = get(ylab(3), 'Pos');
-%
-% ylab(1).Position = [p2(1), p1(2:3)];
-% ylab(3).Position = [p2(1), p3(2:3)];
-
-% Change color of ticklabels
-ax = gca;
-for i = 1:10
-    ax.XTickLabel{i} = sprintf('\\color[rgb]{%f,%f,%f}%s', ...
-       epCols(i,:) , ax.XTickLabel{i});
-end
-
-function [str, delta, fs] = getStr(pv,mod)
-astFs = 25;
-if pv>0.05
-    str = 'n.s.'; fs = 18; delta(1)=0.025; delta(2) = .018;
-    str = [];
-elseif pv<0.0005
-    str = '***'; fs = astFs; delta(1)=0; delta(2) = 0.028;
-elseif pv<0.005
-    str = '**'; fs = astFs; delta(1)=0; delta(2) = 0.028;
-elseif pv<0.05
-    str = '*';  fs = astFs; delta(1)=0; delta(2) = .028;
-else
-    str = 'nan';
-end
-if strcmp(mod,'up')
-    delta = -delta(2);
-else
-    delta = delta(2);
-end
-end
-
-function addPatches(c, con, dy, faceAlpha, varargin)
-if isempty(varargin)
-    ymin = -1;
-    ymax = 1;
-else
-    YL = varargin{1};
-    ymin = YL(1);
-    ymax = YL(2);
-end
-if c~=3
-    x([1 4]) = con.def{c};
-    x([2 3]) = con.def{c};
-    y([1 4]) = ymin - dy;
-    y([2 3]) = ymax + dy;
-    ccol = con.col{c};
-    hold on, ch = patch(x,y,ccol,'EdgeColor','none', 'FaceAlpha',faceAlpha);
-else
-    % Interference protocol
-    x([1 4]) = con.def{c};
-    x([2 3]) = con.def{c};
-    y([1 4]) = ymin - dy;
-    y([2 3]) = [0 0];
-    ccol = con.col{c};
-    hold on, ch = patch(x,y,ccol,'EdgeColor','none', 'FaceAlpha',faceAlpha);
-    
-    % Savings protocol
-    x([1 4]) = con.def{c};
-    x([2 3])  = con.def{c};
-    y([1 4])  = [0 0];
-    y([2 3])  =  ymax + dy;
-    %     ccol = [ 1 1 1] - .1;
-    ccol = [ 1 1 1];
-    hold on, ch = patch(x,y,ccol,'EdgeColor','none', 'FaceAlpha',faceAlpha);
-end
-
-uistack(ch,'bottom');
-
-end
-
-function addEpochs(e, ep, YL, fsize, ccol)
-% delLine = .005; %Delta epoch's line
-delLine = -.03; %Delta epoch's line
-% if mod(e,2) == 0
-
-
-%     delColor = .2;
-% else
-%     delColor=0;
+% if strcmp(p.type,'data')
+%     ylab(2) = ylabel('Step Length Asymm.', 'FontSize', fs.xxs);
+%     ylab(2).Position = ylab(2).Position + 0*[0 -d 0] ;
 % end
-% ccol = [.5 .5 .5] - delColor;
-x = ep.def{e};
-% Vertical lines
-%     line(x(1)*[1 1], [-1-del, 1+del], 'Color',[.5 .5 .5],'LineStyle','-', 'LineWidth', 1)
-%     line(x(2)*[1 1], [-1-del, 1+del], 'Color',[.5 .5 .5],'LineStyle','-', 'LineWidth', 1)
 
-% Horizontal lines
-if any(e == [1 4 6 9 2 7])
-    x(2) = x(2) + 5;
-elseif any(e == [3 5 8 10])
-    x(1) = x(1) - 5;
+% xlabel('Strides','FontSize', fs.xxs)
+% text(mean(cax.XLim), ylimits.fin(1)*1.4, 'Strides', 'FontSize', fs.xxs, 'HorizontalAlignment', 'center');
+xticks(p.parad{1}.transitions);
+cax.XTickLabel{4} = ['      ' cax.XTickLabel{4}]; %Shift to the right
+out.rect = rect;
 end
-hold on, line(x, [YL(1)-delLine]*ones(1,2), 'Color',ccol,'LineStyle','-', 'LineWidth', 4)
 
-%     % Vertical text (v1)
-%     hold on, th = text(x(1), -1, ep.names{e},'FontSize', 16, 'color', [.5 .5 .5] - delc, 'VerticalAlignment', 'cap');
-%     set(th,'Rotation', 90);
+function rect = addEpochsNames(ep, dataLim, axesLim, fsize, epcols, pr, addEpochLabels)
+cax = gca;
+ybottom = axesLim(1);
+neps    = length(ep.def);
+for e = 1:neps
+    ind.Start   = [1 4 6 9];
+    ind.Early   = [2 7];
+    ind.End     = [3 5 8 10];
+    %     masks.Start = mySetTrue(ind.Start,neps);
+    %     masks.Early = mySetTrue(ind.Start,neps);
+    %     masks.End   = mySetTrue(ind.Start,neps);
+    
+    ccol = epcols(e,:);
+    delLine = .005; %Delta epoch's line
+    
+    
+    x = ep.def{e};
+    
+    
+    % Add rectangle
+    yRec.top   = dataLim(1);
+    if isempty(pr.height)
+        yRec.bot   = dataLim(1) - 13*delLine;
+    else
+        rHeight    = pr.height.fNormHeight*diff(axesLim)/cax.Position(4);
+        yRec.bot   = dataLim(1) - rHeight;
+    end
+    xRec.left  = x(1);
+    xRec.right = x(2);
+    %     dx = 3; % To make rectangles larger
+    switch e
+        case num2cell(ind.Start)
+            type = 1;
+            if pr.expandStart
+                xRec.right = xRec.right + pr.expandStartMagn*(xRec.right - xRec.left);
+            end
+        case num2cell(ind.Early)
+            type = 2;
+            %             xRec.right = xRec.right + dx*(xRec.right - xRec.left);
+        case num2cell(ind.End)
+            type = 3;
+            %             xRec.left = xRec.left - dx*(xRec.right - xRec.left);
+    end
+    myRectangle(cax, xRec, yRec, type, [0 0 0], [1 1 1], [.5 .5 .5]);
+    
+    % Previous end
+    %     if e>1 && e <= 3
+    %         pExtent = th(e-1).Extent;
+    %         pXend   = sum(pExtent([1 3]));
+    %     end
+    switch e
+        case 1
+            xpos = x(2);
+            horAlignment = 'right';
+        case 2
+            xpos = x(1);
+            horAlignment = 'left';
+        case 3
+            xpos = x(2);
+            horAlignment = 'right';
+    end
+    
+    ystring = ybottom;
+    vertAli = 'baseline';
+    
+    if addEpochLabels
+        switch e
+            case num2cell([1 2 3])
+                hold on, th(e) = text(xpos, ystring, ep.names{e},'FontSize', fsize,...
+                    'color', [0 0 0], 'VerticalAlignment', vertAli , 'HorizontalAlignment', horAlignment);
+        end
+    end
+    % Add vertical line from epoch's definition to its string
+    %     if ~any(e==el1) %Row 2
+    %         hold on, line(mean(x)*ones(2,1), [dataLim(1) - delLine, dataLim(1) - delyString], 'Color', ccol, 'LineWidth', 1)
+    %     end
+    %       a = annotation('textarrow',x,y,'String','y = x ');
+end
+% Compute normalized height of rectangle
+% myRectangle(gca, xRec, yRec, type, [0 0 0], [1 1 1], [.5 .5 .5]);
+rect.height      = yRec.top-yRec.bot; % Height
+rect.range       = diff(cax.YLim);
+rect.normHeight  = cax.Position(4)*rect.height/rect.range; %Height normalized with respect to figure
+end
 
-% Horizontal text (v2)
-el1    = [2 3 5 7 8 10]; %Epochs on row 1
-leftAl = [1 2 4 6 7 9];
-
-if any(e==el1) %If line 1
-    delyString = .025;%
+function  myRectangle(cax, xr, yr, type, colPat, colStr, colEdge)
+if isstruct(xr)
+    x = [xr.left xr.right];
 else
-    delyString = .025 + 0.1; %Vertical displacement for epochs on line 2
+    x = xr;
 end
-delyString = delyString - .05;
-
-if any(e==leftAl)
-    horAlignment = 'left';
-    xpos = x(1);
+if isstruct(yr)
+    y = [yr.bot  yr.top];
 else
-    horAlignment = 'right';
-    xpos = x(2);
+    y = yr;
 end
-hold on, th = text(xpos, YL(1) - delyString, ep.names{e},'FontSize', fsize,...
-    'color', ccol, 'VerticalAlignment', 'cap' , 'HorizontalAlignment', horAlignment);
+% yhline.top = dataLim(1);
+% yhline.bot = dataLim(1) - 13*delLine;
+%     yhline.mid = dataLim(1) - 10*delLine;
+%     hold on, line(x, yhline*ones(1,2), 'Color',ccol,'LineStyle','-', 'LineWidth', 4)
+hold on
+patch(cax, [x fliplr(x)],[y(1)*ones(1,2) y(2)*ones(1,2)], colPat)
+hold on
 
-% Add vertical line from epoch's definition to its string
-if ~any(e==el1) %Row 2
-    hold on, line(mean(x)*ones(2,1), [YL(1) - delLine, YL(1) - delyString], 'Color', ccol, 'LineWidth', 1)
+switch type
+    case 1
+        line(cax, x, y,'Color', colStr,'linewidth',1);
+    case 2
+        line(cax, x, fliplr(y),'Color', colStr,'linewidth',1);
+    case 3
+        line(cax, x, y,'Color', [1 1 1],'linewidth',1);
+        line(cax, x, fliplr(y),'Color', colStr,'linewidth',1);
 end
-%       a = annotation('textarrow',x,y,'String','y = x ');
-
-end
-
-function addPatch(xs, ys, col, faceAlpha, varargin)
-if ~isempty(varargin)
-    ax = varargin{1};
-else
-    ax = gca;
-end
-    X = [xs(1) xs(1) xs(2) xs(2)];
-    Y = [ys(1) ys(2) ys(2) ys(1)];
-    hold on, ch = patch(ax, X,Y, col,'EdgeColor','none', 'FaceAlpha',faceAlpha);
-    uistack(ch,'bottom');
+patch(cax, [x fliplr(x)],[y(1)*ones(1,2) y(2)*ones(1,2)],...
+    colPat, 'Facecolor', 'none', 'Linewidth', .5, ...
+    'EdgeColor', colEdge);
 end

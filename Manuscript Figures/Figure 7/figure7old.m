@@ -4,6 +4,8 @@ clc
 close all
 clear all
 
+load parad
+
 %% Initializations---------------------------------------------------------
 my_set_default(16,1,3)
 fsize.big     = 20;
@@ -21,7 +23,7 @@ nrnc = [7,4];
 spInd = {1:4, 5:16, [21 25], [22 26], [23 24 27 28]};
 % Load InterferenceSavings data
 % load('..\..\Research_Pitt_AS\Data\IntereferenceData_Oct_29_2018\Preprocessed\IS\IndvSubjectsData_preprocessed_v3.mat')
-load('..\Data\Experimental\IS_preprocessed_v3.mat')
+load('.\Manuscript Figures\Data\Experimental\IS Experiment\IS_preprocessed_v3.mat')
 
 % Extract info
 p.i = summary.p{1}; %Interference pert
@@ -45,7 +47,7 @@ gr.cols = {allc(2,:), allc(1,:)};
 % Conditions
 con.def = {[1 150], [151 750], [751,750+1200], [1951,2100], [2101,2700], [2701,2850]};
 con.col = {[1 1 1], allc(5,:) + [0 .2 0], allc(2,:),        [1 1 1],    allc(5,:) + [0 .2 0],  [1 1 1]};
-con.names = {'N', 'A_1', 'B', 'N_S', 'A_2', 'WO'};
+con.names = {'N', 'A_1', 'B', 'N_S', 'A_2', 'W_O'};
 
 % Epochs
 ep.def = {[151, 155], [201, 230], [721,750], [1951, 1955], [2071, 2100], [2101 2105], [2151 2180], [2671 2700], [2701 2705], [2821, 2850]};
@@ -129,6 +131,15 @@ h.FontSize = fsize.nor;
 yticks([-.5 0 .5]);
 % yticklabels('FontSize', fsize.small)
 
+% [cols.default, cols.cbr, cols.grays] = getColors();
+% cols.groups = [cols.default.blue; cols.default.orange];
+% 
+% for gr = 1:2
+% hold on,     
+% prh(gr) = plot(nanTrans(-parad{gr}.y,parad{gr}.transitions),'color',...
+%                cols.groups(gr,:));
+% end
+
 %% 3rd row (1/3): Plot of first 100 strides during A1 [A1(1-100)]----------
 dmr=0;
 dsh = .025;
@@ -186,7 +197,7 @@ text(h)
 
 %% 3rd row (3/3): Plot barplots-----------------------------------------
 % load('C:\Users\Alessandro\Dropbox\Research_Pitt_AS\Data\IntereferenceData_Oct_29_2018\dataForBarPlots.mat')
-load('..\Data\Experimental\IS_barplotData.mat')
+load('.\Manuscript Figures\Data\Experimental\IS Experiment\IS_barplotData.mat')
 
 % my_set_default(20,2,18);
 % plotBarplot(ts, n, Tadj)
